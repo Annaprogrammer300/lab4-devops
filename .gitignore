@@ -1,0 +1,5 @@
+inventory.ini
+*.key
+*.pem
+__pycache__/
+*.log
