@@ -1,0 +1,87 @@
+---
+- name: Deploy lab4 HTTP service
+  hosts: lab4
+  become: yes
+  vars:
+    surname: Startseva
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - curl
+        state: present
+        update_cache: yes
+
+    - name: Create service directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+      loop:
+        - /opt/lab4-service
+        - /opt/lab4-service/html
+
+    - name: Create index.html with surname
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head><title>Lab4 Service</title></head>
+          <body>
+            <h1>{{ surname }}</h1>
+            <p>HTTP server is running!</p>
+          </body>
+          </html>
+        dest: /opt/lab4-service/html/index.html
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Copy service.sh script
+      copy:
+        src: service.sh
+        dest: /opt/lab4-service/service.sh
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Copy systemd unit file
+      copy:
+        src: lab4-service.service
+        dest: /etc/systemd/system/lab4-service.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Ensure service is enabled and started
+      systemd:
+        name: lab4-service
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Wait for service to be ready
+      wait_for:
+        host: 127.0.0.1
+        port: 8000
+        timeout: 10
+
+    - name: Healthcheck via URI
+      uri:
+        url: http://127.0.0.1:8000/
+        return_content: yes
+      register: result
+
+    - name: Show healthcheck result
+      debug:
+        msg: "Healthcheck OK - HTTP {{ result.status }} - {{ result.content | regex_search('<h1>(.*)</h1>') }}"
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
